@@ -1,0 +1,8 @@
+CARPETA DE OVERLAYS PROPIOS
+===========================
+Pon aqui videos de efectos (.mp4 .mov .webm) sobre FONDO NEGRO:
+fuego real, chispas, humo, glitches, lluvia, polvo, luces, etc.
+
+ReelForge los mezcla en modo "screen" (el negro se vuelve transparente)
+en los golpes fuertes de la musica. Activa "Usar mis overlays" en la
+pestana "Fuego y overlays".

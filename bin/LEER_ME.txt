@@ -1,0 +1,1 @@
+Coloca aqui ffmpeg.exe y ffprobe.exe si compilas en local (en GitHub Actions se descargan solos).
