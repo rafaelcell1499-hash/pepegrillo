@@ -1,0 +1,82 @@
+name: Compilar ReelForge (Windows)
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PYTHONUTF8: "1"          # la consola de Windows usa cp1252: forzamos UTF-8
+  PYTHONIOENCODING: "utf-8"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Descargar FFmpeg (build GPL con drawtext, xfade, etc.)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bin | Out-Null
+          $urls = @(
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-7.1.zip",
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          )
+          $ok = $false
+          foreach ($u in $urls) {
+            try { Invoke-WebRequest -Uri $u -OutFile ffmpeg.zip -UseBasicParsing; $ok = $true; break }
+            catch { Write-Host "Fallo $u, probando el siguiente..." }
+          }
+          if (-not $ok) { throw "No se pudo descargar FFmpeg" }
+          Expand-Archive -Path ffmpeg.zip -DestinationPath ffmpeg_tmp -Force
+          Copy-Item (Get-ChildItem ffmpeg_tmp -Recurse -Filter ffmpeg.exe  | Select-Object -First 1).FullName bin\ffmpeg.exe
+          Copy-Item (Get-ChildItem ffmpeg_tmp -Recurse -Filter ffprobe.exe | Select-Object -First 1).FullName bin\ffprobe.exe
+          .\bin\ffmpeg.exe -hide_banner -version | Select-Object -First 1
+
+      - name: Prueba del motor (render de un reel de prueba)
+        continue-on-error: true      # informativo: no bloquea la compilacion
+        run: python main.py --selftest
+
+      - name: Compilar con PyInstaller
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --windowed --name ReelForge `
+            --collect-all customtkinter `
+            --add-data "bin;bin" `
+            main.py
+
+      - name: Preparar carpeta final
+        shell: pwsh
+        run: |
+          Copy-Item overlays dist\ReelForge\overlays -Recurse
+          Copy-Item README.md dist\ReelForge\LEEME.md
+          Compress-Archive -Path dist\ReelForge -DestinationPath ReelForge-Windows.zip -Force
+
+      - name: Subir artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReelForge-Windows
+          path: ReelForge-Windows.zip
+          if-no-files-found: error
+
+      - name: Publicar release (solo con tag vX.Y.Z)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ReelForge-Windows.zip
